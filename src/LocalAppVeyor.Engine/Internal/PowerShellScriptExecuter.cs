@@ -5,33 +5,37 @@ namespace LocalAppVeyor.Engine.Internal
 {
     internal static class PowerShellScriptExecuter
     {
+        private static PowerShell powerShell = PowerShell.Create();
+
         public static bool Execute(
             string workingDirectory,
             string script,
             Action<string> onOutputDataReceived,
             Action<string> onErrorDataReceived)
         {
-            using (var powerShell = PowerShell.Create())
+            var successful = true;
+
+            powerShell.AddScript(script);
+
+            powerShell.Streams.Warning.DataAdding += (sender, args) =>
             {
-                var errorsOccured = false;
+                onErrorDataReceived(args.ItemAdded.ToString());
+            };
 
-                powerShell.AddScript(script);
+            powerShell.Streams.Error.DataAdding += (sender, args) =>
+            {
+                onErrorDataReceived(args.ItemAdded.ToString());
+                successful = false;
+            };
 
-                powerShell.Streams.Information.DataAdded += (sender, args) =>
-                {
-                    onOutputDataReceived(powerShell.Streams.Information[args.Index].MessageData.ToString());
-                };
+            var results = powerShell.Invoke();
 
-                powerShell.Streams.Error.DataAdded += (sender, args) =>
-                {
-                    onOutputDataReceived(powerShell.Streams.Error[args.Index].ErrorDetails.Message);
-                    errorsOccured = true;
-                };
-
-                powerShell.Invoke();
-
-                return errorsOccured;
+            foreach (PSObject result in results)
+            {
+                onOutputDataReceived(result.ToString());
             }
+            
+            return successful && !powerShell.HadErrors;
         }
     }
 }
