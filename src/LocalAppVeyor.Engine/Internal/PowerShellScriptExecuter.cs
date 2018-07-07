@@ -15,7 +15,15 @@ namespace LocalAppVeyor.Engine.Internal
         {
             var successful = true;
 
+            powerShell.Commands.Clear();
             powerShell.AddScript(script);
+
+            powerShell.Streams.ClearStreams();
+
+            powerShell.Streams.Information.DataAdding += (sender, args) =>
+            {
+                onOutputDataReceived(args.ItemAdded.ToString());
+            };
 
             powerShell.Streams.Warning.DataAdding += (sender, args) =>
             {
@@ -28,12 +36,11 @@ namespace LocalAppVeyor.Engine.Internal
                 successful = false;
             };
 
-            var results = powerShell.Invoke();
+            var results = powerShell.BeginInvoke();
 
-            foreach (PSObject result in results)
-            {
-                onOutputDataReceived(result.ToString());
-            }
+            results.AsyncWaitHandle.WaitOne();
+
+            powerShell.EndInvoke(results);
             
             return successful && !powerShell.HadErrors;
         }
